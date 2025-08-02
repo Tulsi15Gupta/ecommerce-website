@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Simple E-Commerce</title>
+  <style>
+    body {
+      font-family: sans-serif;
+      margin: 0;
+      padding: 0;
+      background-color: #f4f4f4;
+    }
+
+    .container {
+      display: flex;
+      flex-wrap: wrap;
+    }
+
+    .sidebar {
+      width: 220px;
+      background: #fff;
+      padding: 20px;
+      border-right: 1px solid #ccc;
+      height: 100vh;
+      box-sizing: border-box;
+    }
+
+    .product-area {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+      gap: 20px;
+      padding: 20px;
+      flex-grow: 1;
+    }
+
+    .card {
+      background: white;
+      padding: 10px;
+      border-radius: 10px;
+      box-shadow: 0 0 5px rgba(0,0,0,0.1);
+      text-align: center;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+    }
+
+    .card img {
+      width: 100%;
+      height: 150px;
+      object-fit: contain;
+    }
+
+    .card h4 {
+      margin: 10px 0 5px;
+      font-size: 16px;
+      min-height: 50px;
+    }
+
+    button {
+      background-color: #28a745;
+      color: white;
+      padding: 6px 10px;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+    }
+
+    button:hover {
+      background-color: #218838;
+    }
+
+    .cart-link {
+      display: inline-block;
+      padding: 10px 20px;
+      background: #333;
+      color: #fff;
+      text-decoration: none;
+      border-radius: 5px;
+      margin: 20px auto;
+      text-align: center;
+    }
+
+    .cart-container {
+      width: 100%;
+      display: flex;
+      justify-content: center;
+    }
+
+    .in-cart {
+      margin-top: 8px;
+      color: #28a745;
+      font-weight: bold;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <aside class="sidebar">
+      <h2>Filters</h2>
+      <h3>Brand</h3>
+      <label><input type="checkbox" class="brand-filter" value="Electronics"> Electronics</label><br>
+      <label><input type="checkbox" class="brand-filter" value="Jewelery"> Jewelery</label><br>
+      <label><input type="checkbox" class="brand-filter" value="Men's clothing"> Men's clothing</label><br>
+      <label><input type="checkbox" class="brand-filter" value="Women's clothing"> Women's clothing</label><br>
+
+      <h3>Price</h3>
+      <label><input type="checkbox" class="price-filter" value="2000"> Below ₹2000</label><br>
+      <label><input type="checkbox" class="price-filter" value="5000"> Below ₹5000</label><br>
+      <label><input type="checkbox" class="price-filter" value="10000"> Below ₹10000</label>
+    </aside>
+
+    <main class="product-area" id="productArea">
+      <!-- Products will be loaded here -->
+    </main>
+  </div>
+  
+  <div class="cart-container">
+    <a href="cart.html" class="cart-link">View Cart 🛒 (<span id="cartCount">0</span>)</a>
+  </div>
+
+  <script>
+    let products = [];
+    const productArea = document.getElementById("productArea");
+    const brandFilters = document.querySelectorAll(".brand-filter");
+    const priceFilters = document.querySelectorAll(".price-filter");
+
+    // STEP 1: FETCH FROM API
+    async function fetchProducts() {
+      try {
+        const res = await fetch("https://fakestoreapi.com/products");
+        const data = await res.json();
+
+        products = data.map(item => ({
+          id: item.id,
+          name: item.title,
+          price: Math.round(item.price * 85), // USD to INR approx
+          brand: item.category.charAt(0).toUpperCase() + item.category.slice(1),
+          image: item.image
+        }));
+
+        loadProducts(products);
+      } catch (error) {
+        console.error("Error fetching data", error);
+        productArea.innerHTML = "<p>Error loading products.</p>";
+      }
+    }
+
+    // STEP 2: DISPLAY PRODUCTS
+    function loadProducts(filtered = products) {
+      productArea.innerHTML = "";
+      const cart = JSON.parse(localStorage.getItem("cart")) || [];
+
+      if (filtered.length === 0) {
+        productArea.innerHTML = "<p>No products match your filters.</p>";
+        return;
+      }
+
+      filtered.forEach(prod => {
+        const existing = cart.find(item => item.id === prod.id);
+        const qtyText = existing ? `<p class="in-cart">In Cart: ${existing.qty}</p>` : "";
+
+        const card = document.createElement("div");
+        card.classList.add("card");
+        card.innerHTML = `
+          <img src="${prod.image}" alt="${prod.name}">
+          <h4>${prod.name.slice(0, 40)}...</h4>
+          <p>Brand: ${prod.brand}</p>
+          <p>Price: ₹${prod.price}</p>
+          <button onclick="addToCart(${prod.id})">Add to Cart</button>
+          ${qtyText}
+        `;
+        productArea.appendChild(card);
+      });
+    }
+
+    // STEP 3: FILTERING
+    function filterProducts() {
+      const selectedBrands = Array.from(brandFilters).filter(cb => cb.checked).map(cb => cb.value);
+      const selectedPrices = Array.from(priceFilters).filter(cb => cb.checked).map(cb => Number(cb.value));
+
+      let filtered = products;
+
+      if (selectedBrands.length > 0) {
+        filtered = filtered.filter(p => selectedBrands.includes(p.brand));
+      }
+
+      if (selectedPrices.length > 0) {
+        const maxPrice = Math.min(...selectedPrices);
+        filtered = filtered.filter(p => p.price <= maxPrice);
+      }
+
+      loadProducts(filtered);
+    }
+
+    brandFilters.forEach(cb => cb.addEventListener("change", filterProducts));
+    priceFilters.forEach(cb => cb.addEventListener("change", filterProducts));
+
+    // STEP 4: ADD TO CART
+    function addToCart(productId) {
+      const cart = JSON.parse(localStorage.getItem("cart")) || [];
+      const product = products.find(p => p.id === productId);
+      const existing = cart.find(item => item.id === productId);
+
+      if (existing) {
+        existing.qty += 1;
+      } else {
+        cart.push({ ...product, qty: 1 });
+      }
+
+      localStorage.setItem("cart", JSON.stringify(cart));
+      updateCartCount();
+      loadProducts(); // Refresh to update qty display
+    }
+
+    // STEP 5: Update cart count
+    function updateCartCount() {
+      const cart = JSON.parse(localStorage.getItem("cart")) || [];
+      const totalItems = cart.reduce((sum, item) => sum + item.qty, 0);
+      document.getElementById("cartCount").innerText = totalItems;
+    }
+
+    fetchProducts(); // Load products
+    updateCartCount(); // Load cart count on page load
+  </script>
+</body>
+</html>
